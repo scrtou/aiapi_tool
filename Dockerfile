@@ -15,4 +15,4 @@ COPY . .
 
 EXPOSE 5555
 
-CMD ["python3", "src/loginlocal.py"]
+CMD ["uvicorn", "src.loginlocal:app", "--host", "0.0.0.0", "--port", "5555"]

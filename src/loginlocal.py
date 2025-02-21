@@ -586,13 +586,15 @@ async def handle_login(request: ChaynsLoginRequest):
 async def health_check():
     return {"status": "ok"}
 
-if __name__ == "__main__":
+# 使用启动事件处理初始化
+@app.on_event("startup")
+async def startup_event():
     print("启动登录服务")
     print("清理环境...")
     os.system("pkill -f chrome")
     os.system("rm -rf /tmp/chrome-data-*")
     time.sleep(2)
-    
+
     print("启动浏览器")
     try:
         start_time = time.time()
@@ -602,8 +604,11 @@ if __name__ == "__main__":
             raise Exception("浏览器启动失败")
         end_time = time.time()
         print(f"启动浏览器成功: {end_time - start_time} 秒")
-        
-        uvicorn.run(app, host="0.0.0.0", port=5555, log_level="info")
     except Exception as e:
         print(f"启动浏览器失败: {str(e)}")
         raise
+
+# 如果直接运行Python文件,则使用这个入口
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=5555, log_level="info")
