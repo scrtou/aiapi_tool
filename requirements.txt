@@ -1,0 +1,10 @@
+fastapi 
+uvicorn 
+httpx 
+pydantic 
+selenium 
+webdriver_manager
+psutil 
+typing
+Retry
+requests
