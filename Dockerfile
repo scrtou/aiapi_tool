@@ -15,4 +15,4 @@ COPY . .
 
 EXPOSE 5555
 
-CMD ["python3", "loginlocal.py"]
+CMD ["python3", "src/loginlocal.py"]
