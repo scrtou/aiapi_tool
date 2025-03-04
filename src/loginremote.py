@@ -315,10 +315,7 @@ def check_selenium_connection():
         print(f"Selenium服务器不可用: {str(e)}")
     return False
 def login_chayns(username, password):
-    """登录Chayns并获取用户信息"""
-    print("login_chayns start")
-    print("username:",username)
-    print("password:",password)
+     """登录Chayns并获取用户信息"""
     driver_manager = WebDriverManager.get_instance()
     driver = None
     try:
@@ -332,8 +329,9 @@ def login_chayns(username, password):
         print(f"浏览器准备时间: {end_time - start_time} 秒")
         
         print("正在访问网站...")
+        #登录页面https://chayns.de/id
         driver.get("https://chayns.de")
-            
+
         print("等待页面加载...")
         WebDriverWait(driver, 20).until(
             EC.presence_of_element_located((By.TAG_NAME, "body"))
@@ -360,21 +358,21 @@ def login_chayns(username, password):
         '''
         try:
             # 先等待页面上任何按钮元素出现
-            WebDriverWait(driver, 10).until(
+            WebDriverWait(driver, 20).until(
                 EC.presence_of_element_located((By.TAG_NAME, "button"))
             )
             
             # 然后尝试多种方式查找登录按钮,先通过css选择器
             try:
                 # 尝试通过按钮文本找到"Anmelden"按钮
-                login_button = WebDriverWait(driver, 10).until(
+                login_button = WebDriverWait(driver, 20).until(
                         EC.element_to_be_clickable((By.CSS_SELECTOR, "button.beta-chayns-button"))
                     )
                 print("找到登录按钮 (通过beta-chayns-button类)")
                 
             except:
                 try:
-                    login_button = WebDriverWait(driver, 10).until(
+                    login_button = WebDriverWait(driver, 20).until(
                         EC.element_to_be_clickable((By.XPATH, "//button[contains(text(), 'Anmelden')]"))
                     )
                     print("找到登录按钮 (通过Anmelden文本)")
@@ -382,7 +380,7 @@ def login_chayns(username, password):
                     raise Exception("没有找到任何按钮")
             
             # 确保按钮可以点击
-            WebDriverWait(driver, 10).until(
+            WebDriverWait(driver, 20).until(
                 EC.element_to_be_clickable((By.TAG_NAME, "button"))
             )
             
@@ -398,16 +396,16 @@ def login_chayns(username, password):
         #/html/body/div[1]/div/div[1]/div/div[2]/div[2]/div/div/div[2]
         #先判断是否有.这个元素div.last-login-user-item:nth-child(2),有click事件
         
-        WebDriverWait(driver,10).until(
+        WebDriverWait(driver,20).until(
             EC.frame_to_be_available_and_switch_to_it((By.CSS_SELECTOR, "iframe[src*='login.chayns.net']"))
         )
         try:
-            WebDriverWait(driver, 10).until(
+            WebDriverWait(driver, 20).until(
                 EC.presence_of_element_located((By.XPATH, "/html/body/div[1]/div/div[1]/div/div[2]/div[2]/div/div/div[2]"))
             )
             print("存在other-user元素")
             #获取，点击
-            other_user = WebDriverWait(driver, 10).until(
+            other_user = WebDriverWait(driver, 20).until(
                 EC.element_to_be_clickable((By.XPATH, "/html/body/div[1]/div/div[1]/div/div[2]/div[2]/div/div/div[2]"))
             )
             other_user.click()
@@ -415,183 +413,108 @@ def login_chayns(username, password):
             print("不存在other-user元素")
         
         # 等待邮箱输入框出现并输入
-        #//*[@id="CC_INPUT_0"]
-        time.sleep(2)
-        username_input = WebDriverWait(driver, 10).until(
-            EC.presence_of_element_located((By.XPATH, "//*[@id='CC_INPUT_0']"))
-        )
-        username_input.send_keys(username)
-        print("输入邮箱")
+        try:
+            username_input = WebDriverWait(driver, 20).until(
+                EC.presence_of_element_located((By.CSS_SELECTOR, "#CC_INPUT_0"))
+            )
+            username_input.send_keys(username)
+            print("输入邮箱")
+        except Exception as e:
+            print(f"输入邮箱时出错: {str(e)}")
+            return None
         
-        #点击button
-        #.form__email__wrapper__button
-        button = WebDriverWait(driver, 10).until(
-            EC.element_to_be_clickable((By.CSS_SELECTOR, ".form__email__wrapper__button"))
-        )
-        button.click()
+        # 点击button
+        time.sleep(1)
+        try:
+            button = WebDriverWait(driver, 20).until(
+                EC.element_to_be_clickable((By.CSS_SELECTOR, ".form__email__wrapper__button"))
+            )
+            button.click()
+        except Exception as e:
+            print(f"点击邮箱按钮时出错: {str(e)}")
+            return None
         
         # 等待密码输入框出现并输入
-        #//*[@id="CC_INPUT_3"]
-        password_input = WebDriverWait(driver, 10).until(
-            EC.presence_of_element_located((By.XPATH, "//*[@id='CC_INPUT_3']"))
-        )
-        password_input.send_keys(password)
-        print("输入密码")
-        # 点击按钮
-        #.form__password-wrapper__button
-        submit_button = WebDriverWait(driver, 10).until(
-            EC.element_to_be_clickable((By.CSS_SELECTOR, ".form__password-wrapper__button"))
-        )
-        submit_button.click()
-         # 切回主框架
+        time.sleep(1)
+
+        try:
+            password_input = WebDriverWait(driver, 20).until(
+                EC.presence_of_element_located((By.CSS_SELECTOR, "#CC_INPUT_3"))
+            )
+            password_input.send_keys(password)
+            print("输入密码")
+        except Exception as e:
+            print(f"输入密码时出错: {str(e)}")
+            return None
+        
+        # 点击提交按钮
+        time.sleep(1)
+
+        try:
+            submit_button = WebDriverWait(driver, 20).until(
+                EC.element_to_be_clickable((By.CSS_SELECTOR, ".form__password-wrapper__button"))
+            )
+            submit_button.click()
+        except Exception as e:
+            print(f"点击提交按钮时出错: {str(e)}")
+            return None
+        
+        # 切回主框架
+        time.sleep(1)
         driver.switch_to.default_content()
         
         # 在获取数据之前检查登录状态
         if not check_login_status(driver):
             print("登录状态检查失败")
             return None
+        
         print("登录成功！")
-         # 等待页面完全加载和JavaScript执行
+        
+        # 等待页面完全加载和JavaScript执行
         WebDriverWait(driver, 20).until(
             lambda x: x.execute_script("return document.readyState") == "complete"
         )
-        # 初始化data字典
-        data = {}
-        # 等待页面完全加载
-        time.sleep(10)  # 增加等待时间
-        '''
-        try:
-            # 等待确保globalData加载完成，减少超时时间但增加重试
-            for attempt in range(3):
-                try:
-                    WebDriverWait(driver, 20).until(
-                        lambda x: x.execute_script("return window.globalData && window.globalData.AppUser != null")
-                    )
-                    for i in range(3):
-                        try:
-                            print("尝试获取user,第",i+1,"次")
-                            #如何执行script
-                            
-                            script_element = WebDriverWait(driver, 20).until(
-                            lambda x: x.find_element(By.CSS_SELECTOR, "script#__NEXT_DATA__")
-                            )
-                            script_content = script_element.get_attribute('innerHTML')
-                            #打印initialReduxState
-                            user_data = json.loads(script_content).get("props", {}).get("pageProps", {}).get("initialReduxState", {}).get("user", {})
-                            print("user_data:",user_data)
-                            if user_data:
-                                print("JSON解析成功")
-                                break
-                            else:
-                                if i == 2:
-                                    raise Exception("user解析失败")
-                                time.sleep(5)
-                        except:
-                            raise Exception("user解析失败")
-
-                    break
-                except:
-                    if attempt == 2:
-                        raise
-                    time.sleep(5)
-        except Exception as e:
-            print(f"登录失for attempt in range(3):败: {str(e)}")
+        
+        # 等待Cookies中有一个"at_"或者30秒超时
+        WebDriverWait(driver, 30).until(
+            lambda d: any(cookie['name'].startswith('at_') for cookie in d.get_cookies())
+        )
+        
+        # 获取该cookies的value
+        #获取at_开头的name
+        at_xxx_cookie = None
+        for cookie in driver.get_cookies():
+            if cookie['name'].startswith('at_'):
+                at_xxx_cookie = cookie
+                break
+        
+        if at_xxx_cookie is None:
+            print("未找到at_xxx cookie")
             return None
-        '''
-
         
-        # 等待登录流程完成...
+        data = {}
+        data["token"] = at_xxx_cookie["value"]
+        #print("at_xxx:", at_xxx)
         
-        # 修改获取用户数据的逻辑
-        try:
-            print("等待用户数据加载...")
-            # 等待 __NEXT_DATA__ 脚本加载 css选择器
-            WebDriverWait(driver, 20).until(
-                EC.presence_of_element_located((By.CSS_SELECTOR, "script#__NEXT_DATA__"))
-            )
-            print("等待确保数据已经被注入")
-            # 等待确保数据已经被注入
-            for i in range(3):
-                try:
-                    WebDriverWait(driver, 20).until(
-                        lambda x: x.execute_script("return window.globalData && window.globalData.AppUser != null")
-                    )
-                    '''
-                    WebDriverWait(driver, 20).until(
-                        lambda x: x.execute_script("""
-                            try {
-                        const data = JSON.parse(document.getElementById('__NEXT_DATA__').textContent);
-                        return data && data.props && data.props.pageProps && 
-                               data.props.pageProps.initialReduxState && 
-                               data.props.pageProps.initialReduxState.user;
-                        } catch(e) {
-                        return false;
-                    }
-                    """)
-                    )
-                    '''
-                    break
-                except:
-                    if i == 2:
-                        raise Exception("未能获取到用户数据")
-                    time.sleep(5)
-            
-            # 获取用户数据
-            '''
-            user_data = driver.execute_script("""
-                const data = JSON.parse(document.getElementById('__NEXT_DATA__').textContent);
-                return data.props.pageProps.initialReduxState.user;
-            """)
-            '''
-            global_data = driver.execute_script("return window.globalData")
-            user_data2 = global_data["AppUser"]
-            #print("获取到的用户数据2:", user_data2)
-            if not user_data2:
-                raise Exception("未能获取到用户数据") 
-        except Exception as e:
-            print(f"获取用户数据失败: {str(e)}")
-            raise
-        try:
-            # 等待确保数据加载完成
-            print("开始提取用户信息...")
-            # 尝试不同的数据路径
-            try:
-                '''                
-                data.update({
-                    "email": user_data.get("email", ""),
-                    "userid": user_data.get("userId", 0),
-                    "personid": str(user_data.get("personId", "")),
-                    "token": user_data.get("token", "")
-                })
-                '''
-                data.update({
-                    "email": username,
-                    "userid": user_data2.get("TobitUserID", 0),
-                    "personid": str(user_data2.get("PersonID", "")),
-                    "token": user_data2.get("TobitAccessToken", "")
-                })
-                #print("提取的数据:", data)
-                if all(data.values()):  # 确保所有字段都有值
-                    print("成功获取所有必要数据")
-                    return data
-                else:
-                    print("部分数据缺失:", {k: v for k, v in data.items() if not v})
-                    return None
-                
-            except Exception as e:
-                print(f"提取用户信息时出错: {str(e)}")
-                return None
-            
-        except Exception as e:
-            print(f"获取数据失败: {str(e)}")
-            '''
-            # 尝试打印页面源码，查看是否有其他可用的数据
-            try:
-                print("页面源码片段:", driver.page_source[:1000])
-            except:
-                pass
-            '''
-            return None   
+        # 用at_xxx作为鉴权头访问https://chayns.de/id
+        driver.get("https://chayns.de/id")
+        # 等待页面完全加载
+        WebDriverWait(driver, 20).until(
+            lambda x: x.execute_script("return document.readyState") == "complete"
+        )
+        
+        # 获取access token
+        access_token_input = WebDriverWait(driver, 20).until(
+            EC.presence_of_element_located((By.CSS_SELECTOR, "input[type='hidden']"))
+        )
+        access_token = access_token_input.get_attribute("value")
+       #转换为json
+        user_data = json.loads(access_token)
+        data["personid"] = str(user_data["user"]["personId"])
+        data["userid"] = int(user_data["user"]["userId"])
+        data["email"] = username;
+        print("data:", data)
+        return data
     except Exception as e:
         print(f"获取用户信息时出现错误: {str(e)}")
         return None
