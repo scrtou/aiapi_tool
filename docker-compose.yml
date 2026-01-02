@@ -1,0 +1,9 @@
+version: '3'
+services:
+  aiapi-tool:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    network_mode: "host"
+    # 使用 host 网络模式，服务直接监听宿主机端口 5557
+

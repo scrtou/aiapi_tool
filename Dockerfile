@@ -13,6 +13,6 @@ USER seluser
 
 COPY . .
 
-EXPOSE 5555
+EXPOSE 5557
 
-CMD ["uvicorn", "src.loginlocal:app", "--host", "0.0.0.0", "--port", "5555"]
+CMD ["uvicorn", "src.loginlocal:app", "--host", "0.0.0.0", "--port", "5557"]

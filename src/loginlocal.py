@@ -8,6 +8,7 @@ from webdriver_manager.chrome import ChromeDriverManager
 import time
 import json
 import os
+import re
 import psutil
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
@@ -386,7 +387,7 @@ def login_chayns(username, password):
         # 等待邮箱输入框出现并输入
         try:
             username_input = WebDriverWait(driver, 20).until(
-                EC.presence_of_element_located((By.CSS_SELECTOR, "#CC_INPUT_0"))
+                EC.presence_of_element_located((By.CSS_SELECTOR, 'input[name="email-phone"]')) 
             )
             username_input.send_keys(username)
             print("输入邮箱")
@@ -398,7 +399,7 @@ def login_chayns(username, password):
         time.sleep(1)
         try:
             button = WebDriverWait(driver, 20).until(
-                EC.element_to_be_clickable((By.CSS_SELECTOR, ".form__email__wrapper__button"))
+                EC.element_to_be_clickable((By.XPATH, "//button[contains(@class, 'beta-chayns-button')]//div[contains(text(), 'Weiter')]"))
             )
             button.click()
         except Exception as e:
@@ -410,7 +411,7 @@ def login_chayns(username, password):
 
         try:
             password_input = WebDriverWait(driver, 20).until(
-                EC.presence_of_element_located((By.CSS_SELECTOR, "#CC_INPUT_3"))
+                EC.presence_of_element_located((By.CSS_SELECTOR, 'input[autocomplete="current-password"]'))
             )
             password_input.send_keys(password)
             print("输入密码")
@@ -423,7 +424,7 @@ def login_chayns(username, password):
 
         try:
             submit_button = WebDriverWait(driver, 20).until(
-                EC.element_to_be_clickable((By.CSS_SELECTOR, ".form__password-wrapper__button"))
+                EC.element_to_be_clickable((By.XPATH, "//button[contains(@class, 'beta-chayns-button')]//div[contains(text(), 'Weiter')]"))
             )
             submit_button.click()
         except Exception as e:
@@ -465,25 +466,29 @@ def login_chayns(username, password):
         
         data = {}
         data["token"] = at_xxx_cookie["value"]
-        #print("at_xxx:", at_xxx)
         
-        # 用at_xxx作为鉴权头访问https://chayns.de/id
-        driver.get("https://chayns.de/id")
-        # 等待页面完全加载
-        WebDriverWait(driver, 20).until(
-            lambda x: x.execute_script("return document.readyState") == "complete"
-        )
-        
-        # 获取access token
-        access_token_input = WebDriverWait(driver, 20).until(
-            EC.presence_of_element_located((By.CSS_SELECTOR, "input[type='hidden']"))
-        )
-        access_token = access_token_input.get_attribute("value")
-       #转换为json
-        user_data = json.loads(access_token)
-        data["personid"] = str(user_data["user"]["personId"])
-        data["userid"] = int(user_data["user"]["userId"])
-        data["email"] = username;
+        # 等待 window.cwInfo 对象出现, 该对象在登录后的页面中
+        try:
+            WebDriverWait(driver, 20).until(
+                lambda d: d.execute_script("return typeof window.cwInfo !== 'undefined' && window.cwInfo.user;")
+            )
+        except Exception as e:
+            print(f"等待 window.cwInfo 对象超时: {e}")
+            print(f"当前 URL: {driver.current_url}")
+            print(f"页面标题: {driver.title}")
+            return None
+
+        # 直接从JavaScript获取用户信息对象
+        user_info = driver.execute_script("return window.cwInfo;")
+
+        if not user_info or "user" not in user_info or "personId" not in user_info["user"] or "id" not in user_info["user"]:
+             print("用户信息不完整。")
+             print(f"找到的用户信息: {user_info.get('user')}")
+             return None
+
+        data["personid"] = str(user_info["user"]["personId"])
+        data["userid"] = int(user_info["user"]["id"])
+        data["email"] = username
         print("data:", data)
         return data
     except Exception as e:
