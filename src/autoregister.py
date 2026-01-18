@@ -1003,7 +1003,7 @@ class AutoRegister:
             pass
         
         # 等待页面加载
-        WebDriverWait(self.driver, AutoRegisterConfig.PAGE_WAIT_TIMEOUT).until(
+        WebDriverWait(self.driver,Config.PAGE_WAIT_TIMEOUT).until(
             lambda x: x.execute_script("return document.readyState") == "complete"
         )
         
@@ -1119,7 +1119,7 @@ class AutoRegister:
         self._step_start("获取 Pro 权限状态")
         
         # 延迟 2 秒执行，确保后端数据已同步
-        time.sleep(2)
+        time.sleep(3)
         
         try:
             url = AutoRegisterConfig.USER_SETTINGS_API_URL.format(personId=person_id)
