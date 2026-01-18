@@ -13,7 +13,8 @@ import psutil
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 import uvicorn
-from typing import Optional
+from typing import Optional, Dict, Any
+import requests
 from datetime import datetime
 from selenium.webdriver.common.keys import Keys
 from selenium.common.exceptions import TimeoutException
@@ -34,7 +35,8 @@ def dump_visible_inputs(driver, label=""):
 def dump_body_text(driver, label=""):
     try:
         txt = driver.execute_script("return document.body && document.body.innerText ? document.body.innerText : ''")
-        log_message(f"{label} bodyText前300字: {txt[:300].replace('\\n',' | ')}")
+        cleaned_txt = txt[:300].replace('\n', ' | ')
+        log_message(f"{label} bodyText前300字: {cleaned_txt}")
     except Exception as e:
         log_message(f"{label} 读取bodyText失败: {e}")
 
@@ -95,6 +97,29 @@ def dump_visible_buttons(driver, label=""):
             txt = (b.text or "").strip()
             log_message(f"按钮文本='{txt}'  disabled={b.get_attribute('disabled')}  outerHTML={b.get_attribute('outerHTML')[:200]}")
 
+def dump_login_errors(driver, label=""):
+    """输出登录错误信息（如有）"""
+    try:
+        # 检查是否有错误消息元素
+        error_selectors = [
+            ".error-message",
+            ".alert-error",
+            "[role='alert']",
+            ".login-error",
+            ".validation-error",
+        ]
+        for sel in error_selectors:
+            for el in driver.find_elements(By.CSS_SELECTOR, sel):
+                if el.is_displayed():
+                    log_message(f"{label} 错误消息: {el.text}")
+        
+        # 输出页面文本以便调试
+        dump_body_text(driver, label)
+        dump_visible_inputs(driver, label)
+        dump_visible_buttons(driver, label)
+    except Exception as e:
+        log_message(f"{label} 输出错误信息失败: {e}")
+
 def find_and_click_next(driver, timeout=20):
     # 1) 先找可见的 submit 按钮（最稳）
     try:
@@ -141,6 +166,8 @@ class ChaynsLoginResponse(BaseModel):
     userid: int
     personid: str
     token: str
+    has_pro_access: Optional[bool]
+    password: str
 
 class ErrorResponse(BaseModel):
     error: str
@@ -337,6 +364,43 @@ def check_login_status(driver):
     except Exception as e:
         log_message(f"检查登录状态失败: {str(e)}")
         return False
+
+def get_user_pro_access(token: str, person_id: str) -> Optional[bool]:
+    """
+    获取用户 Pro 权限状态
+    
+    Args:
+        token: 用户登录 token
+        person_id: 用户 Person ID
+        
+    Returns:
+        True: 有 Pro 权限
+        False: 没有 Pro 权限
+        None: 获取失败
+    """
+    try:
+        url = f"https://cube.tobit.cloud/ai-proxy/v1/userSettings/personId/{person_id}"
+        headers = {
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {token}"
+        }
+        
+        response = requests.get(url, headers=headers, timeout=30)
+        
+        log_message(f"获取用户设置 API 调用完成: status_code={response.status_code}")
+        
+        if response.status_code == 200:
+            data = response.json()
+            has_pro_access = data.get("hasProAccess", None)
+            log_message(f"用户 Pro 权限状态: {has_pro_access}")
+            return has_pro_access
+        else:
+            log_message(f"获取用户设置 API 返回错误: {response.status_code} - {response.text[:200]}")
+            
+    except Exception as e:
+        log_message(f"获取用户设置 API 调用失败: {e}")
+    
+    return None
 
 def login_chayns(username, password):
     """登录Chayns并获取用户信息"""
@@ -545,6 +609,12 @@ def login_chayns(username, password):
         data["personid"] = str(user_info["user"]["personId"])
         data["userid"] = int(user_info["user"]["id"])
         data["email"] = username
+        data["password"] = password
+
+        
+        # 获取用户 Pro 权限状态
+        data["has_pro_access"] = get_user_pro_access(data["token"], data["personid"])
+        
         log_message(f"data: {data}")
         return data
     except Exception as e:
@@ -571,6 +641,65 @@ async def handle_login(request: ChaynsLoginRequest):
 async def health_check():
     return {"status": "ok"}
 
+# ============== 自动注册相关 ==============
+# 导入自动注册模块
+_autoregister_available = False
+try:
+    # 尝试相对导入 (当作为 src.loginlocal 运行时)
+    from src.autoregister import (
+        AutoRegisterRequest,
+        AutoRegisterResponse,
+        AutoRegisterError,
+        handle_autoregister,
+    )
+    _autoregister_available = True
+except ImportError:
+    try:
+        # 尝试直接导入 (当直接运行 python loginlocal.py 时)
+        from autoregister import (
+            AutoRegisterRequest,
+            AutoRegisterResponse,
+            AutoRegisterError,
+            handle_autoregister,
+        )
+        _autoregister_available = True
+    except ImportError as e:
+        log_message(f"警告：无法导入自动注册模块: {e}")
+
+if _autoregister_available:
+    @app.post(
+        "/aichat/chayns/autoregister",
+        response_model=AutoRegisterResponse,
+        responses={
+            400: {"model": AutoRegisterError, "description": "参数不完整/不合法"},
+            409: {"model": AutoRegisterError, "description": "邮箱已存在"},
+            422: {"model": AutoRegisterError, "description": "流程断言失败"},
+            503: {"model": AutoRegisterError, "description": "服务繁忙"},
+            504: {"model": AutoRegisterError, "description": "超时"},
+            500: {"model": AutoRegisterError, "description": "其它异常"},
+        }
+    )
+    async def handle_auto_register(request: AutoRegisterRequest):
+        """
+        自动注册端点
+        
+        自动完成以下流程：
+        1. 创建 DuckMail 临时邮箱
+        2. 打开登录页面并输入邮箱
+        3. 检测到邮箱未注册后进入注册流程
+        4. 填写注册表单（first/last name）
+        5. 轮询 DuckMail 获取验证邮件
+        6. 打开确认链接并设置密码
+        7. 验证登录成功并返回凭证
+        
+        注意：
+        - 服务端使用全局锁保证串行执行
+        - 如果已有任务在执行，会返回 503 错误
+        """
+        return handle_autoregister(request)
+    
+    log_message("自动注册端点已启用: POST /aichat/chayns/autoregister")
+
 # 使用启动事件处理初始化
 @app.on_event("startup")
 async def startup_event():
@@ -596,4 +725,4 @@ async def startup_event():
 # 如果直接运行Python文件,则使用这个入口
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=5555, log_level="info")
+    uvicorn.run(app, host="0.0.0.0", port=5557, log_level="info")
