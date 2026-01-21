@@ -1003,7 +1003,7 @@ class AutoRegister:
             pass
         
         # 等待页面加载
-        WebDriverWait(self.driver,Config.PAGE_WAIT_TIMEOUT).until(
+        WebDriverWait(self.driver, AutoRegisterConfig.PAGE_WAIT_TIMEOUT).until(
             lambda x: x.execute_script("return document.readyState") == "complete"
         )
         
