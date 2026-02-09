@@ -4,6 +4,6 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    network_mode: "host"
-    # 使用 host 网络模式，服务直接监听宿主机端口 5557
-
+    ports:
+      - "0.0.0.0:5557:5557"
+    # 使用 bridge 网络并显式映射端口，避免 host 网络带来的安全风险
