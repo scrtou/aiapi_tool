@@ -5,5 +5,14 @@ services:
       context: .
       dockerfile: Dockerfile
     ports:
-      - "0.0.0.0:5557:5557"
+      - "127.0.0.1:5557:5557"
+    networks:
+      aiapi_shared:
+        aliases:
+          - aiapi-tool
     # 使用 bridge 网络并显式映射端口，避免 host 网络带来的安全风险
+
+networks:
+  aiapi_shared:
+    external: true
+    name: aiapi_shared
