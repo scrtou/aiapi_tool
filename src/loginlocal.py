@@ -18,9 +18,6 @@ import requests
 from datetime import datetime
 from selenium.webdriver.common.keys import Keys
 from selenium.common.exceptions import TimeoutException
-from selenium.common.exceptions import TimeoutException
-from selenium.webdriver.common.by import By
-from selenium.webdriver.support.ui import WebDriverWait
 
 def dump_visible_inputs(driver, label=""):
     inputs = driver.find_elements(By.CSS_SELECTOR, "input")
@@ -96,6 +93,248 @@ def dump_visible_buttons(driver, label=""):
         if b.is_displayed():
             txt = (b.text or "").strip()
             log_message(f"按钮文本='{txt}'  disabled={b.get_attribute('disabled')}  outerHTML={b.get_attribute('outerHTML')[:200]}")
+
+LOGIN_ENTRY_TEXTS = ("anmelden", "login", "sign in", "signin", "einloggen")
+LOGIN_ENTRY_SELECTORS = (
+    "button.beta-chayns-button",
+    "button[class*='login']",
+    "[role='button'][class*='login']",
+    "a[href*='login']",
+    "[data-testid*='login']",
+    "[data-qa*='login']",
+)
+LOGIN_START_URLS = (
+    "https://chayns.de/id",
+    "https://chayns.de",
+    "https://chayns.net/72975-29241",
+)
+LOGIN_IFRAME_SELECTOR = "iframe[src*='login.chayns.net']"
+LOGIN_EMAIL_SELECTOR = "input[name='email-phone'], input[type='email'], #CC_INPUT_0"
+
+def dump_login_entry_candidates(driver, label=""):
+    candidates = driver.find_elements(By.CSS_SELECTOR, "button, a, [role='button']")
+    visible = [el for el in candidates if el.is_displayed()]
+    log_message(f"{label} 可见登录候选元素数量: {len(visible)}")
+    for el in visible[:20]:
+        txt = (el.text or "").strip()
+        aria = (el.get_attribute("aria-label") or "").strip()
+        title = (el.get_attribute("title") or "").strip()
+        href = (el.get_attribute("href") or "").strip()
+        tag = el.tag_name
+        log_message(
+            f"候选 tag={tag} text='{txt[:60]}' aria='{aria[:40]}' title='{title[:40]}' href='{href[:80]}'"
+        )
+
+def find_login_entry(driver):
+    for selector in LOGIN_ENTRY_SELECTORS:
+        elements = driver.find_elements(By.CSS_SELECTOR, selector)
+        for el in elements:
+            try:
+                if el.is_displayed() and el.is_enabled():
+                    return el, f"selector={selector}"
+            except Exception:
+                continue
+
+    fallback = driver.find_elements(By.CSS_SELECTOR, "button, a, [role='button']")
+    for el in fallback:
+        try:
+            if not el.is_displayed() or not el.is_enabled():
+                continue
+            text = (el.text or "").strip().lower()
+            aria = (el.get_attribute("aria-label") or "").strip().lower()
+            title = (el.get_attribute("title") or "").strip().lower()
+            href = (el.get_attribute("href") or "").strip().lower()
+            combined = " ".join([text, aria, title])
+            if any(k in combined for k in LOGIN_ENTRY_TEXTS) or "login" in href:
+                return el, f"text={text[:30]} href={href[:40]}"
+        except Exception:
+            continue
+
+    return None, ""
+
+def click_login_entry(driver, timeout=30):
+    def pick(d):
+        el, reason = find_login_entry(d)
+        if el is None:
+            return None
+        return {"el": el, "reason": reason}
+
+    result = WebDriverWait(driver, timeout).until(pick)
+    driver.execute_script("arguments[0].scrollIntoView({block:'center'});", result["el"])
+    safe_click(driver, result["el"])
+    return result["reason"]
+
+def click_login_entry_via_js(driver):
+    script = r"""
+const keywords = (arguments[0] || []).map(k => (k || "").toString().toLowerCase());
+function norm(v) { return (v || "").toString().trim().toLowerCase(); }
+function isVisible(el) {
+  try {
+    const style = window.getComputedStyle(el);
+    if (!style || style.display === "none" || style.visibility === "hidden" || Number(style.opacity || "1") === 0) {
+      return false;
+    }
+    const rect = el.getBoundingClientRect();
+    return rect.width > 0 && rect.height > 0;
+  } catch (e) {
+    return false;
+  }
+}
+function collect(root, out) {
+  if (!root || !root.querySelectorAll) return;
+  root.querySelectorAll('button, a, [role="button"], input[type="button"], input[type="submit"]').forEach(el => out.push(el));
+  root.querySelectorAll("*").forEach(el => {
+    if (el.shadowRoot) collect(el.shadowRoot, out);
+  });
+}
+const raw = [];
+collect(document, raw);
+const uniq = [];
+const seen = new Set();
+for (const el of raw) {
+  if (seen.has(el)) continue;
+  seen.add(el);
+  uniq.push(el);
+}
+const ranked = [];
+for (const el of uniq) {
+  const tag = norm(el.tagName);
+  const text = norm(el.innerText || el.textContent || el.value);
+  const aria = norm(el.getAttribute("aria-label"));
+  const title = norm(el.getAttribute("title"));
+  const href = norm(el.getAttribute("href"));
+  const cls = norm(typeof el.className === "string" ? el.className : (el.className && el.className.baseVal));
+  const combined = [text, aria, title].join(" ");
+  const score =
+      (keywords.some(k => combined.includes(k)) ? 100 : 0) +
+      (href.includes("login") ? 60 : 0) +
+      (cls.includes("login") ? 25 : 0) +
+      (tag === "button" ? 5 : 0);
+  if (score <= 0) continue;
+  ranked.push({
+    element: el,
+    tag,
+    text,
+    aria,
+    title,
+    href,
+    score,
+    visible: isVisible(el),
+    disabled: !!el.disabled,
+  });
+}
+ranked.sort((a, b) => b.score - a.score);
+for (const item of ranked) {
+  if (!item.visible || item.disabled) continue;
+  try {
+    item.element.scrollIntoView({block: "center", inline: "center"});
+    item.element.click();
+    return {
+      clicked: true,
+      reason: "js:" + item.tag + ":" + (item.text || item.aria || item.href || "").slice(0, 60),
+      candidates: ranked.slice(0, 10).map(c => ({
+        tag: c.tag, text: c.text, aria: c.aria, title: c.title, href: c.href, score: c.score, visible: c.visible
+      }))
+    };
+  } catch (e) {}
+}
+return {
+  clicked: false,
+  reason: "no-js-candidate-clicked",
+  candidates: ranked.slice(0, 10).map(c => ({
+    tag: c.tag, text: c.text, aria: c.aria, title: c.title, href: c.href, score: c.score, visible: c.visible
+  }))
+};
+"""
+    result = driver.execute_script(script, list(LOGIN_ENTRY_TEXTS))
+    if isinstance(result, dict):
+        return result
+    return {"clicked": False, "reason": "invalid-js-result", "candidates": []}
+
+def switch_to_login_iframe_if_present(driver, timeout=8):
+    try:
+        WebDriverWait(driver, timeout).until(
+            EC.frame_to_be_available_and_switch_to_it((By.CSS_SELECTOR, LOGIN_IFRAME_SELECTOR))
+        )
+        return True
+    except TimeoutException:
+        return False
+
+def wait_login_email_input(driver, timeout=12):
+    try:
+        WebDriverWait(driver, timeout).until(
+            EC.visibility_of_element_located((By.CSS_SELECTOR, LOGIN_EMAIL_SELECTOR))
+        )
+        return True
+    except TimeoutException:
+        return False
+
+def ensure_login_context(driver):
+    for idx, url in enumerate(LOGIN_START_URLS, start=1):
+        log_message(f"尝试登录入口页面({idx}/{len(LOGIN_START_URLS)}): {url}")
+        driver.get(url)
+        WebDriverWait(driver, 20).until(
+            EC.presence_of_element_located((By.TAG_NAME, "body"))
+        )
+        time.sleep(2)
+        log_message(f"页面标题: {driver.title}")
+        log_message(f"当前URL: {driver.current_url}")
+
+        if switch_to_login_iframe_if_present(driver, timeout=8):
+            log_message("页面已直接提供登录 iframe，无需点击登录入口")
+            return
+
+        current_url_lower = (driver.current_url or "").lower()
+        if "login.chayns.net" in current_url_lower and wait_login_email_input(driver, timeout=8):
+            log_message("当前已处于登录页面（顶层）")
+            return
+
+        log_message("未直接检测到登录 iframe，尝试点击登录入口")
+        clicked = False
+        try:
+            clicked_by = click_login_entry(driver, timeout=12)
+            clicked = True
+            log_message(f"成功点击登录入口 ({clicked_by})")
+        except Exception as e:
+            log_message(f"Selenium定位登录入口失败: {repr(e)}")
+
+        if not clicked:
+            js_result = click_login_entry_via_js(driver)
+            if js_result.get("clicked"):
+                clicked = True
+                log_message(f"通过JS成功点击登录入口 ({js_result.get('reason')})")
+            else:
+                log_message(f"JS定位登录入口失败: {js_result.get('reason')}")
+                for candidate in js_result.get("candidates", [])[:10]:
+                    log_message(
+                        f"JS候选 tag={candidate.get('tag', '')} text='{(candidate.get('text') or '')[:50]}' "
+                        f"aria='{(candidate.get('aria') or '')[:40]}' href='{(candidate.get('href') or '')[:70]}' "
+                        f"score={candidate.get('score')}"
+                    )
+                dump_login_entry_candidates(driver, "定位登录入口失败时")
+
+        if not clicked:
+            continue
+
+        if switch_to_login_iframe_if_present(driver, timeout=25):
+            log_message("登录 iframe 已出现并切换成功")
+            return
+
+        current_url_lower = (driver.current_url or "").lower()
+        if "login.chayns.net" in current_url_lower and wait_login_email_input(driver, timeout=12):
+            log_message("点击后跳转到登录页面（顶层）")
+            return
+
+    log_message("常规登录入口失败，尝试直接打开登录页: https://login.chayns.net")
+    driver.get("https://login.chayns.net")
+    WebDriverWait(driver, 20).until(
+        EC.presence_of_element_located((By.TAG_NAME, "body"))
+    )
+    if wait_login_email_input(driver, timeout=20):
+        log_message("直接登录页可用")
+        return
+
+    raise Exception("未能进入登录 iframe 或登录页面")
 
 def dump_login_errors(driver, label=""):
     """输出登录错误信息（如有）"""
@@ -415,85 +654,17 @@ def login_chayns(username, password):
             raise Exception("无法创建浏览器实例")
         end_time = time.time()
         log_message(f"浏览器准备时间: {end_time - start_time} 秒")
-        
-        log_message("正在访问网站...")
-        #登录页面https://chayns.de/id
-        driver.get("https://chayns.de")
 
-        log_message("等待页面加载...")
-        WebDriverWait(driver, 20).until(
-            EC.presence_of_element_located((By.TAG_NAME, "body"))
-        )
-        
-        # 添加延迟确保页面完全加载
-        time.sleep(2)
-        
-        log_message("正在尝试定位登录按钮...")
-        log_message(f"页面标题: {driver.title}")
-        log_message(f"当前URL: {driver.current_url}")
-        
-        #多行注释
-        '''
-        # 打印页面源码用于调试
-        log_message(f"页面源码: {driver.page_source[:1000]}")  # 只打印前1000个字符
-        
-        # 尝试查找所有按钮元素
-        buttons = driver.find_elements(By.TAG_NAME, "button")
-        log_message(f"找到 {len(buttons)} 个按钮元素")
-        for button in buttons:
-            log_message(f"按钮文本: {button.text}")
-            log_message(f"按钮类名: {button.get_attribute('class')}")
-        '''
+        log_message("正在访问网站并进入登录上下文...")
+        ensure_login_context(driver)
+
         try:
-            # 先等待页面上任何按钮元素出现
-            WebDriverWait(driver, 20).until(
-                EC.presence_of_element_located((By.TAG_NAME, "button"))
-            )
-            
-            # 然后尝试多种方式查找登录按钮,先通过css选择器
-            try:
-                # 尝试通过按钮文本找到"Anmelden"按钮
-                login_button = WebDriverWait(driver, 20).until(
-                        EC.element_to_be_clickable((By.CSS_SELECTOR, "button.beta-chayns-button"))
-                    )
-                log_message("找到登录按钮 (通过beta-chayns-button类)")
-                
-            except:
-                try:
-                    login_button = WebDriverWait(driver, 20).until(
-                        EC.element_to_be_clickable((By.XPATH, "//button[contains(text(), 'Anmelden')]"))
-                    )
-                    log_message("找到登录按钮 (通过Anmelden文本)")
-                except:
-                    raise Exception("没有找到任何按钮")
-            
-            # 确保按钮可以点击
-            WebDriverWait(driver, 20).until(
-                EC.element_to_be_clickable((By.TAG_NAME, "button"))
-            )
-            
-            # 使用JavaScript点击按钮
-            driver.execute_script("arguments[0].click();", login_button)
-            log_message("成功点击登录按钮")
-            
-        except Exception as e:
-            log_message(f"无法找到或点击登录按钮: {str(e)}")
-            raise
-        
-        # 等待登录iframe加载
-        #/html/body/div[1]/div/div[1]/div/div[2]/div[2]/div/div/div[2]
-        #先判断是否有.这个元素div.last-login-user-item:nth-child(2),有click事件
-        
-        WebDriverWait(driver,20).until(
-            EC.frame_to_be_available_and_switch_to_it((By.CSS_SELECTOR, "iframe[src*='login.chayns.net']"))
-        )
-        try:
-            WebDriverWait(driver, 20).until(
+            WebDriverWait(driver, 5).until(
                 EC.presence_of_element_located((By.XPATH, "/html/body/div[1]/div/div[1]/div/div[2]/div[2]/div/div/div[2]"))
             )
             log_message("存在other-user元素")
             #获取，点击
-            other_user = WebDriverWait(driver, 20).until(
+            other_user = WebDriverWait(driver, 5).until(
                 EC.element_to_be_clickable((By.XPATH, "/html/body/div[1]/div/div[1]/div/div[2]/div[2]/div/div/div[2]"))
             )
             other_user.click()
@@ -503,7 +674,7 @@ def login_chayns(username, password):
         # 等待邮箱输入框出现并输入
         try:
             username_input = WebDriverWait(driver, 20).until(
-                EC.visibility_of_element_located((By.CSS_SELECTOR, 'input[name="email-phone"]'))
+                EC.visibility_of_element_located((By.CSS_SELECTOR, LOGIN_EMAIL_SELECTOR))
             )
             username_input.clear()
             username_input.send_keys(username)
@@ -528,7 +699,10 @@ def login_chayns(username, password):
         # 点 Continue 后，等待邮箱输入框消失（进入下一步的强信号）
         try:
             WebDriverWait(driver, 10).until(
-                EC.invisibility_of_element_located((By.CSS_SELECTOR, "input[name='email-phone']"))
+                lambda d: all(
+                    (not el.is_displayed())
+                    for el in d.find_elements(By.CSS_SELECTOR, LOGIN_EMAIL_SELECTOR)
+                )
             )
         except TimeoutException:
             log_message("Continue后邮箱输入框仍然存在：没有进入下一步")
@@ -618,7 +792,12 @@ def login_chayns(username, password):
         log_message(f"data: {data}")
         return data
     except Exception as e:
-        log_message(f"获取用户信息时出现错误: {str(e)}")
+        current_url = ""
+        try:
+            current_url = driver.current_url if driver else ""
+        except Exception:
+            pass
+        log_message(f"获取用户信息时出现错误: {repr(e)} url={current_url}")
         return None
 
 @app.post("/aichat/chayns/login", response_model=ChaynsLoginResponse, responses={400: {"model": ErrorResponse}, 401: {"model": ErrorResponse}, 500: {"model": ErrorResponse}})
