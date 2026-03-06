@@ -4,8 +4,9 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+    restart: unless-stopped
     ports:
-      - "127.0.0.1:5557:5557"
+      - "55557:55557"
     networks:
       aiapi_shared:
         aliases:

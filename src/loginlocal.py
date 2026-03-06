@@ -904,4 +904,4 @@ async def startup_event():
 # 如果直接运行Python文件,则使用这个入口
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=5557, log_level="info")
+    uvicorn.run(app, host="0.0.0.0", port=55557, log_level="info")
