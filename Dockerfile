@@ -1,18 +1,14 @@
-# Use the Selenium standalone Chrome image as base
 FROM selenium/standalone-chrome:latest
 
-# Switch to root for installations
 USER root
 
-# Set environment variables
 ENV DEBIAN_FRONTEND=noninteractive
 ENV TZ=Etc/UTC
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 ENV PATH="/app/venv/bin:$PATH"
-ENV PYTHONPATH="/app:/app/src"
+ENV PYTHONPATH="/app:/app/libs:/app/services"
 
-# Install system dependencies
 RUN apt-get update && apt-get install -y \
     python3 \
     python3-pip \
@@ -22,28 +18,20 @@ RUN apt-get update && apt-get install -y \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
-# Create a virtual environment
 RUN python3 -m venv /app/venv
-# Upgrade pip and install Python dependencies
-RUN /app/venv/bin/pip install --upgrade pip && \
-    /app/venv/bin/pip install \
-    selenium \
-    webdriver-manager \
-    fastapi \
-    uvicorn \
-    pydantic \
-    requests \
-    httpx \
-    psutil
 
-# Set work directory
 WORKDIR /app
 
-# Copy application code
-COPY src/ ./src/
+COPY requirements.txt ./requirements.txt
+RUN /app/venv/bin/pip install --upgrade pip && \
+    /app/venv/bin/pip install -r requirements.txt
 
-# Expose port
-EXPOSE 5557
+COPY libs/ ./libs/
+COPY services/ ./services/
+COPY doc/ ./doc/
+COPY README.md ./README.md
+COPY .env.example ./.env.example
 
-# Run the application using venv python with unbuffered output
-CMD ["python", "-u", "src/loginlocal.py"]
+EXPOSE 8000 8001 8002 8003 8004
+
+CMD ["uvicorn", "services.orchestrator_service.app:app", "--host", "0.0.0.0", "--port", "8000"]

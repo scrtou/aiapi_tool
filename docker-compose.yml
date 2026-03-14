@@ -1,19 +1,256 @@
-version: '3'
+version: '3.9'
 services:
-  aiapi-tool:
+  mail-service:
     build:
       context: .
       dockerfile: Dockerfile
+    command: uvicorn services.mail_service.app:app --host 0.0.0.0 --port 8001
     restart: unless-stopped
     ports:
-      - "55557:55557"
+      - "8001:8001"
+    environment:
+      APP_DB_PATH: /data/aiapi_tool.db
+      INTERNAL_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN:-}
+      INTERNAL_SERVICE_PROJECT_ID: ${INTERNAL_SERVICE_PROJECT_ID:-internal}
+      PLATFORM_API_KEYS_JSON: ${PLATFORM_API_KEYS_JSON:-[]}
+      CORS_ALLOW_ORIGINS: ${CORS_ALLOW_ORIGINS:-*}
+      CORS_ALLOW_METHODS: ${CORS_ALLOW_METHODS:-GET,POST,PUT,PATCH,DELETE,OPTIONS}
+      CORS_ALLOW_HEADERS: ${CORS_ALLOW_HEADERS:-*}
+      CORS_EXPOSE_HEADERS: ${CORS_EXPOSE_HEADERS:-}
+      CORS_ALLOW_CREDENTIALS: ${CORS_ALLOW_CREDENTIALS:-0}
+      MOEMAIL_BASE_URL: ${MOEMAIL_BASE_URL:-https://moemail-bqw.pages.dev}
+      MOEMAIL_API_KEY: ${MOEMAIL_API_KEY:-}
+      GPTMAIL_BASE_URL: ${GPTMAIL_BASE_URL:-https://mail.chatgpt.org.uk}
+      GPTMAIL_API_KEY: ${GPTMAIL_API_KEY:-}
+      DUCKMAIL_BASE_URL: ${DUCKMAIL_BASE_URL:-https://api.duckmail.sbs}
+      DUCKMAIL_DOMAIN: ${DUCKMAIL_DOMAIN:-duckmail.sbs}
+      SMAILPRO_API_KEY: ${SMAILPRO_API_KEY:-}
+      SMAILPRO_WEB_HEADLESS: ${SMAILPRO_WEB_HEADLESS:-0}
+    volumes:
+      - ./data:/data
     networks:
-      aiapi_shared:
-        aliases:
-          - aiapi-tool
-    # 使用 bridge 网络并显式映射端口，避免 host 网络带来的安全风险
+      - aiapi_tool_net
+
+  proxy-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: uvicorn services.proxy_service.app:app --host 0.0.0.0 --port 8002
+    restart: unless-stopped
+    ports:
+      - "8002:8002"
+    environment:
+      APP_DB_PATH: /data/aiapi_tool.db
+      INTERNAL_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN:-}
+      INTERNAL_SERVICE_PROJECT_ID: ${INTERNAL_SERVICE_PROJECT_ID:-internal}
+      PLATFORM_API_KEYS_JSON: ${PLATFORM_API_KEYS_JSON:-[]}
+      CORS_ALLOW_ORIGINS: ${CORS_ALLOW_ORIGINS:-*}
+      CORS_ALLOW_METHODS: ${CORS_ALLOW_METHODS:-GET,POST,PUT,PATCH,DELETE,OPTIONS}
+      CORS_ALLOW_HEADERS: ${CORS_ALLOW_HEADERS:-*}
+      CORS_EXPOSE_HEADERS: ${CORS_EXPOSE_HEADERS:-}
+      CORS_ALLOW_CREDENTIALS: ${CORS_ALLOW_CREDENTIALS:-0}
+      STATIC_PROXY_POOL_JSON: ${STATIC_PROXY_POOL_JSON:-[]}
+    volumes:
+      - ./data:/data
+    networks:
+      - aiapi_tool_net
+
+  login-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: uvicorn services.login_service.app:app --host 0.0.0.0 --port 8004
+    restart: unless-stopped
+    ports:
+      - "8004:8004"
+    environment:
+      APP_DB_PATH: /data/aiapi_tool.db
+      INTERNAL_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN:-}
+      INTERNAL_SERVICE_PROJECT_ID: ${INTERNAL_SERVICE_PROJECT_ID:-internal}
+      PLATFORM_API_KEYS_JSON: ${PLATFORM_API_KEYS_JSON:-[]}
+      CORS_ALLOW_ORIGINS: ${CORS_ALLOW_ORIGINS:-*}
+      CORS_ALLOW_METHODS: ${CORS_ALLOW_METHODS:-GET,POST,PUT,PATCH,DELETE,OPTIONS}
+      CORS_ALLOW_HEADERS: ${CORS_ALLOW_HEADERS:-*}
+      CORS_EXPOSE_HEADERS: ${CORS_EXPOSE_HEADERS:-}
+      CORS_ALLOW_CREDENTIALS: ${CORS_ALLOW_CREDENTIALS:-0}
+      CHAYNS_AUTH_API_BASE_URL: ${CHAYNS_AUTH_API_BASE_URL:-https://auth.tobit.com/v2}
+      CHAYNS_LOCATION_ID: ${CHAYNS_LOCATION_ID:-153008}
+      CHAYNS_LOGIN_TOKEN_TYPE: ${CHAYNS_LOGIN_TOKEN_TYPE:-1}
+    volumes:
+      - ./data:/data
+    networks:
+      - aiapi_tool_net
+
+  registration-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: uvicorn services.registration_service.app:app --host 0.0.0.0 --port 8003
+    restart: unless-stopped
+    ports:
+      - "8003:8003"
+    environment:
+      APP_DB_PATH: /data/aiapi_tool.db
+      INTERNAL_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN:-}
+      INTERNAL_SERVICE_PROJECT_ID: ${INTERNAL_SERVICE_PROJECT_ID:-internal}
+      PLATFORM_API_KEYS_JSON: ${PLATFORM_API_KEYS_JSON:-[]}
+      CORS_ALLOW_ORIGINS: ${CORS_ALLOW_ORIGINS:-*}
+      CORS_ALLOW_METHODS: ${CORS_ALLOW_METHODS:-GET,POST,PUT,PATCH,DELETE,OPTIONS}
+      CORS_ALLOW_HEADERS: ${CORS_ALLOW_HEADERS:-*}
+      CORS_EXPOSE_HEADERS: ${CORS_EXPOSE_HEADERS:-}
+      CORS_ALLOW_CREDENTIALS: ${CORS_ALLOW_CREDENTIALS:-0}
+      REGISTRATION_ENABLE_STARTUP_RECOVERY: ${REGISTRATION_ENABLE_STARTUP_RECOVERY:-0}
+      REGISTRATION_ENABLE_EMBEDDED_WORKER: ${REGISTRATION_ENABLE_EMBEDDED_WORKER:-0}
+      MAIL_SERVICE_URL: ${MAIL_SERVICE_URL:-http://mail-service:8001}
+      REGISTRATION_WORKER_POLL_INTERVAL_SECONDS: ${REGISTRATION_WORKER_POLL_INTERVAL_SECONDS:-2}
+      MOEMAIL_BASE_URL: ${MOEMAIL_BASE_URL:-https://moemail-bqw.pages.dev}
+      MOEMAIL_API_KEY: ${MOEMAIL_API_KEY:-}
+      GPTMAIL_BASE_URL: ${GPTMAIL_BASE_URL:-https://mail.chatgpt.org.uk}
+      GPTMAIL_API_KEY: ${GPTMAIL_API_KEY:-}
+      DUCKMAIL_BASE_URL: ${DUCKMAIL_BASE_URL:-https://api.duckmail.sbs}
+      DUCKMAIL_DOMAIN: ${DUCKMAIL_DOMAIN:-duckmail.sbs}
+      SMAILPRO_API_KEY: ${SMAILPRO_API_KEY:-}
+      SMAILPRO_WEB_HEADLESS: ${SMAILPRO_WEB_HEADLESS:-0}
+      CHAYNS_AUTH_API_BASE_URL: ${CHAYNS_AUTH_API_BASE_URL:-https://auth.tobit.com/v2}
+      CHAYNS_AUTH_REGISTER_API_BASE_URL: ${CHAYNS_AUTH_REGISTER_API_BASE_URL:-https://cube.tobit.cloud/auth/v4}
+      CHAYNS_AUTH_CHECK_ALIAS_SITE_ID: ${CHAYNS_AUTH_CHECK_ALIAS_SITE_ID:-00000}
+      CHAYNS_SITE_ID: ${CHAYNS_SITE_ID:-75508-15270}
+      CHAYNS_LOCATION_ID: ${CHAYNS_LOCATION_ID:-153008}
+      MCAPTCHA_BASE_URL: ${MCAPTCHA_BASE_URL:-https://captcha.tobit.cloud}
+    shm_size: '2gb'
+    volumes:
+      - ./data:/data
+    networks:
+      - aiapi_tool_net
+
+  registration-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: python -m services.registration_service.worker
+    restart: unless-stopped
+    environment:
+      APP_DB_PATH: /data/aiapi_tool.db
+      INTERNAL_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN:-}
+      INTERNAL_SERVICE_PROJECT_ID: ${INTERNAL_SERVICE_PROJECT_ID:-internal}
+      PLATFORM_API_KEYS_JSON: ${PLATFORM_API_KEYS_JSON:-[]}
+      MAIL_SERVICE_URL: ${MAIL_SERVICE_URL:-http://mail-service:8001}
+      REGISTRATION_WORKER_POLL_INTERVAL_SECONDS: ${REGISTRATION_WORKER_POLL_INTERVAL_SECONDS:-2}
+      MOEMAIL_BASE_URL: ${MOEMAIL_BASE_URL:-https://moemail-bqw.pages.dev}
+      MOEMAIL_API_KEY: ${MOEMAIL_API_KEY:-}
+      GPTMAIL_BASE_URL: ${GPTMAIL_BASE_URL:-https://mail.chatgpt.org.uk}
+      GPTMAIL_API_KEY: ${GPTMAIL_API_KEY:-}
+      DUCKMAIL_BASE_URL: ${DUCKMAIL_BASE_URL:-https://api.duckmail.sbs}
+      DUCKMAIL_DOMAIN: ${DUCKMAIL_DOMAIN:-duckmail.sbs}
+      SMAILPRO_API_KEY: ${SMAILPRO_API_KEY:-}
+      SMAILPRO_WEB_HEADLESS: ${SMAILPRO_WEB_HEADLESS:-0}
+      CHAYNS_AUTH_API_BASE_URL: ${CHAYNS_AUTH_API_BASE_URL:-https://auth.tobit.com/v2}
+      CHAYNS_AUTH_REGISTER_API_BASE_URL: ${CHAYNS_AUTH_REGISTER_API_BASE_URL:-https://cube.tobit.cloud/auth/v4}
+      CHAYNS_AUTH_CHECK_ALIAS_SITE_ID: ${CHAYNS_AUTH_CHECK_ALIAS_SITE_ID:-00000}
+      CHAYNS_SITE_ID: ${CHAYNS_SITE_ID:-75508-15270}
+      CHAYNS_LOCATION_ID: ${CHAYNS_LOCATION_ID:-153008}
+      MCAPTCHA_BASE_URL: ${MCAPTCHA_BASE_URL:-https://captcha.tobit.cloud}
+    shm_size: '2gb'
+    depends_on:
+      - mail-service
+      - registration-service
+    volumes:
+      - ./data:/data
+    networks:
+      - aiapi_tool_net
+
+  orchestrator-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: uvicorn services.orchestrator_service.app:app --host 0.0.0.0 --port 8000
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      APP_DB_PATH: /data/aiapi_tool.db
+      INTERNAL_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN:-}
+      INTERNAL_SERVICE_PROJECT_ID: ${INTERNAL_SERVICE_PROJECT_ID:-internal}
+      PLATFORM_API_KEYS_JSON: ${PLATFORM_API_KEYS_JSON:-[]}
+      CORS_ALLOW_ORIGINS: ${CORS_ALLOW_ORIGINS:-*}
+      CORS_ALLOW_METHODS: ${CORS_ALLOW_METHODS:-GET,POST,PUT,PATCH,DELETE,OPTIONS}
+      CORS_ALLOW_HEADERS: ${CORS_ALLOW_HEADERS:-*}
+      CORS_EXPOSE_HEADERS: ${CORS_EXPOSE_HEADERS:-}
+      CORS_ALLOW_CREDENTIALS: ${CORS_ALLOW_CREDENTIALS:-0}
+      WORKFLOW_ENABLE_STARTUP_RECOVERY: ${WORKFLOW_ENABLE_STARTUP_RECOVERY:-0}
+      WORKFLOW_ENABLE_EMBEDDED_WORKER: ${WORKFLOW_ENABLE_EMBEDDED_WORKER:-0}
+      MAIL_SERVICE_URL: ${MAIL_SERVICE_URL:-http://mail-service:8001}
+      PROXY_SERVICE_URL: ${PROXY_SERVICE_URL:-http://proxy-service:8002}
+      REGISTRATION_SERVICE_URL: ${REGISTRATION_SERVICE_URL:-http://registration-service:8003}
+      WORKFLOW_WORKER_POLL_INTERVAL_SECONDS: ${WORKFLOW_WORKER_POLL_INTERVAL_SECONDS:-2}
+      LOGIN_SERVICE_URL: ${LOGIN_SERVICE_URL:-http://login-service:8004}
+      MOEMAIL_BASE_URL: ${MOEMAIL_BASE_URL:-https://moemail-bqw.pages.dev}
+      MOEMAIL_API_KEY: ${MOEMAIL_API_KEY:-}
+      GPTMAIL_BASE_URL: ${GPTMAIL_BASE_URL:-https://mail.chatgpt.org.uk}
+      GPTMAIL_API_KEY: ${GPTMAIL_API_KEY:-}
+      DUCKMAIL_BASE_URL: ${DUCKMAIL_BASE_URL:-https://api.duckmail.sbs}
+      DUCKMAIL_DOMAIN: ${DUCKMAIL_DOMAIN:-duckmail.sbs}
+      SMAILPRO_API_KEY: ${SMAILPRO_API_KEY:-}
+      SMAILPRO_WEB_HEADLESS: ${SMAILPRO_WEB_HEADLESS:-0}
+      CHAYNS_AUTH_API_BASE_URL: ${CHAYNS_AUTH_API_BASE_URL:-https://auth.tobit.com/v2}
+      CHAYNS_AUTH_REGISTER_API_BASE_URL: ${CHAYNS_AUTH_REGISTER_API_BASE_URL:-https://cube.tobit.cloud/auth/v4}
+      CHAYNS_AUTH_CHECK_ALIAS_SITE_ID: ${CHAYNS_AUTH_CHECK_ALIAS_SITE_ID:-00000}
+      CHAYNS_SITE_ID: ${CHAYNS_SITE_ID:-75508-15270}
+      CHAYNS_LOCATION_ID: ${CHAYNS_LOCATION_ID:-153008}
+      CHAYNS_LOGIN_TOKEN_TYPE: ${CHAYNS_LOGIN_TOKEN_TYPE:-1}
+      MCAPTCHA_BASE_URL: ${MCAPTCHA_BASE_URL:-https://captcha.tobit.cloud}
+    shm_size: '2gb'
+    depends_on:
+      - mail-service
+      - login-service
+      - registration-service
+    volumes:
+      - ./data:/data
+    networks:
+      - aiapi_tool_net
+
+  orchestrator-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: python -m services.orchestrator_service.worker
+    restart: unless-stopped
+    environment:
+      APP_DB_PATH: /data/aiapi_tool.db
+      INTERNAL_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN:-}
+      INTERNAL_SERVICE_PROJECT_ID: ${INTERNAL_SERVICE_PROJECT_ID:-internal}
+      PLATFORM_API_KEYS_JSON: ${PLATFORM_API_KEYS_JSON:-[]}
+      MAIL_SERVICE_URL: ${MAIL_SERVICE_URL:-http://mail-service:8001}
+      PROXY_SERVICE_URL: ${PROXY_SERVICE_URL:-http://proxy-service:8002}
+      REGISTRATION_SERVICE_URL: ${REGISTRATION_SERVICE_URL:-http://registration-service:8003}
+      WORKFLOW_WORKER_POLL_INTERVAL_SECONDS: ${WORKFLOW_WORKER_POLL_INTERVAL_SECONDS:-2}
+      LOGIN_SERVICE_URL: ${LOGIN_SERVICE_URL:-http://login-service:8004}
+      MOEMAIL_BASE_URL: ${MOEMAIL_BASE_URL:-https://moemail-bqw.pages.dev}
+      MOEMAIL_API_KEY: ${MOEMAIL_API_KEY:-}
+      GPTMAIL_BASE_URL: ${GPTMAIL_BASE_URL:-https://mail.chatgpt.org.uk}
+      GPTMAIL_API_KEY: ${GPTMAIL_API_KEY:-}
+      DUCKMAIL_BASE_URL: ${DUCKMAIL_BASE_URL:-https://api.duckmail.sbs}
+      DUCKMAIL_DOMAIN: ${DUCKMAIL_DOMAIN:-duckmail.sbs}
+      SMAILPRO_API_KEY: ${SMAILPRO_API_KEY:-}
+      SMAILPRO_WEB_HEADLESS: ${SMAILPRO_WEB_HEADLESS:-0}
+      CHAYNS_AUTH_API_BASE_URL: ${CHAYNS_AUTH_API_BASE_URL:-https://auth.tobit.com/v2}
+      CHAYNS_AUTH_REGISTER_API_BASE_URL: ${CHAYNS_AUTH_REGISTER_API_BASE_URL:-https://cube.tobit.cloud/auth/v4}
+      CHAYNS_AUTH_CHECK_ALIAS_SITE_ID: ${CHAYNS_AUTH_CHECK_ALIAS_SITE_ID:-00000}
+      CHAYNS_SITE_ID: ${CHAYNS_SITE_ID:-75508-15270}
+      CHAYNS_LOCATION_ID: ${CHAYNS_LOCATION_ID:-153008}
+      CHAYNS_LOGIN_TOKEN_TYPE: ${CHAYNS_LOGIN_TOKEN_TYPE:-1}
+      MCAPTCHA_BASE_URL: ${MCAPTCHA_BASE_URL:-https://captcha.tobit.cloud}
+    shm_size: '2gb'
+    depends_on:
+      - mail-service
+      - proxy-service
+      - login-service
+      - registration-service
+    volumes:
+      - ./data:/data
+    networks:
+      - aiapi_tool_net
 
 networks:
-  aiapi_shared:
-    external: true
-    name: aiapi_shared
+  aiapi_tool_net:
+    driver: bridge
