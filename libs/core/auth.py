@@ -10,6 +10,7 @@ from fastapi import Request
 
 from libs.core.config import env_str
 from libs.core.exceptions import ServiceError
+from libs.core.tracing import set_current_trace_id
 
 
 @dataclass(frozen=True)
@@ -162,6 +163,7 @@ def attach_request_context(request: Request, trace_id: str):
     request.state.trace_id = trace_id
     request.state.auth_context = auth_context
     request.state.project_id = auth_context.project_id
+    set_current_trace_id(trace_id)
 
 
 def get_auth_context(request: Request) -> AuthContext:

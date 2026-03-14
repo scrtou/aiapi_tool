@@ -13,9 +13,23 @@ class SmailProWebProvider(MailProvider):
 
     def create_account(self, *, domain=None, pattern=None, expiry_time_ms=None, options=None) -> MailAccount:
         client = self._build_client()
-        account = client.create_account(domain=domain, pattern=pattern)
-        meta = dict(client.account_meta or {})
-        return MailAccount(provider=self.provider_name, account_id=str(account.account_id), address=account.address, password=account.password, meta=meta)
+        try:
+            account = client.create_account(domain=domain, pattern=pattern)
+            meta = dict(client.account_meta or {})
+            return MailAccount(
+                provider=self.provider_name,
+                account_id=str(account.account_id),
+                address=account.address,
+                password=account.password,
+                status="active",
+                expires_at=None,
+                meta=meta,
+            )
+        finally:
+            try:
+                client.close()
+            except Exception:
+                pass
 
     def list_messages(self, account: MailAccount) -> list[MailMessageSummary]:
         client = self._build_client()
@@ -50,11 +64,23 @@ class SmailProWebProvider(MailProvider):
 
 
     def list_domains(self) -> list[str]:
-        return []
+        client = self._build_client()
+        try:
+            return client.list_domains()
+        finally:
+            try:
+                client.close()
+            except Exception:
+                pass
 
     def health_check(self) -> dict[str, object]:
+        client = self._build_client()
         try:
-            self._build_client()
-            return {"available": True, "error": None, "domains": self.list_domains()}
+            return client.health_check()
         except Exception as exc:
-            return {"available": False, "error": str(exc)}
+            return {"available": False, "error": str(exc), "domains": []}
+        finally:
+            try:
+                client.close()
+            except Exception:
+                pass

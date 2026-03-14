@@ -17,6 +17,15 @@ from services.mail_service.provider_registry import MailProviderRegistry
 
 
 class MailService:
+    @staticmethod
+    def _provider_health_extra_fields(health: dict | None) -> dict:
+        health = health or {}
+        return {
+            key: value
+            for key, value in health.items()
+            if key not in {"available", "error", "domains"}
+        }
+
     def _provider_setting(self, provider_name: str) -> dict:
         setting = self.provider_settings_store.get(provider_name)
         if not setting:
@@ -53,6 +62,7 @@ class MailService:
                     "can_delete": True,
                 },
                 "updated_at": setting.get("updated_at"),
+                **self._provider_health_extra_fields(health),
             })
         return {"providers": providers, "total": len(providers)}
 
@@ -65,12 +75,14 @@ class MailService:
         provider = self.registry.build(provider_name)
         try:
             domains = provider.list_domains() if hasattr(provider, "list_domains") else []
+            health = provider.health_check() if hasattr(provider, "health_check") else {"available": True, "error": None}
             return {
                 "provider_name": provider_name,
                 "domains": domains,
                 "total": len(domains),
-                "available": True,
-                "error": None,
+                "available": bool(health.get("available", True)),
+                "error": health.get("error"),
+                **self._provider_health_extra_fields(health),
             }
         except Exception as exc:
             health = provider.health_check() if hasattr(provider, "health_check") else {"available": False, "error": str(exc)}
@@ -81,6 +93,7 @@ class MailService:
                 "total": len(domains),
                 "available": bool(health.get("available", False)),
                 "error": health.get("error") or str(exc),
+                **self._provider_health_extra_fields(health),
             }
 
     def check_provider_health(self, provider_name: str) -> dict:
@@ -93,6 +106,7 @@ class MailService:
             "available": bool(health.get("available", False)),
             "error": health.get("error"),
             "domains": health.get("domains") or [],
+            **self._provider_health_extra_fields(health),
         }
 
     def __init__(self):
